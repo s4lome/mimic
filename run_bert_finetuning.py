@@ -14,13 +14,12 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import LearningRateMonitor
 
 from mimic_text_reports_dataset import MIMIC_TextReportsDataset
-from mimic_image_dataset import train_val_test_split
+from utils import train_val_test_split
 from multilabel_module import multilabel_train_module
 from utils import plot_train_val_loss
 from utils import plot_train_val_auroc
 from models import Bert_Teacher
 
-#bla
 def run(args):
     # set seeds
     torch.manual_seed(args.seed)
