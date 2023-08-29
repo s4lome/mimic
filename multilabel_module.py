@@ -1,6 +1,7 @@
 import torch
 import pytorch_lightning as pl
 import torch.nn as nn
+import time 
 
 from torchmetrics.classification import MultilabelAUROC
 from torchmetrics.classification import BinaryAUROC
@@ -100,8 +101,8 @@ class multilabel_train_module(pl.LightningModule):
         auroc_global = self.auroc_global(all_predictions, all_targets)
   
         self.log("train_auroc", auroc_global, on_step=False, on_epoch=True, prog_bar=True, logger=self.logging)
-        #self.log("training_time", (((self.training_start_time - time.time()) / 60) * -1) / 60,
-        #          on_step=False, on_epoch=True, prog_bar=True, logger=self.logging)
+        self.log("training_time", (((self.training_start_time - time.time()) / 60) * -1) / 60,
+                  on_step=False, on_epoch=True, prog_bar=True, logger=self.logging)
 
 
         # free memory
