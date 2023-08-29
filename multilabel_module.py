@@ -63,13 +63,14 @@ class multilabel_train_module(pl.LightningModule):
         image_and_text , y = batch
 
         x = image_and_text[0]
-        pk = image_and_text[1]
+        
         
         y_hat = self.model(x)
         y = y.squeeze()
         y_hat = y_hat.squeeze()
 
         if self.teacher:
+            pk = image_and_text[1]
             soft_labels = self.teacher(pk)
             soft_labels = soft_labels / self.temperature
             soft_labels = self.output_activation(soft_labels)

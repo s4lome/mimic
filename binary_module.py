@@ -6,9 +6,6 @@ from torch import optim
 from torchmetrics.classification import BinaryAccuracy
 from torchmetrics.classification import BinaryAUROC
 
-from cosine_annealing_warmup import CosineAnnealingWarmupRestarts
-from focal_loss.focal_loss import FocalLoss
-
 
 class binary_train_module(pl.LightningModule):
     def __init__(self, model, lr, pos_weights):

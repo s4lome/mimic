@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, Dataset
 
 
 class MIMIC_DataSet(Dataset):
-    def __init__(self, path, label_file, transform, task, target_label, view_position):
+    def __init__(self, path, label_file, transform=None, task='multilabel', target_label='No Finding', view_position='PA'):
         self.path=path
         self.task=task
         self.target_label = target_label

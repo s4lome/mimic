@@ -81,7 +81,7 @@ def run(args):
 
     ## callbacks
     # best checkpoint
-    checkpoint_callback = ModelCheckpoint(save_top_k=2
+    checkpoint_callback = ModelCheckpoint(save_top_k=1
                                           , monitor="validation_auroc"
                                           , mode='max')
     
