@@ -123,6 +123,7 @@ def run(args):
     if args.priviliged_knowledge:
         # load fine tuned bert teacher
         bert = Bert_Teacher(args.num_classes)
+
         teacher_module = multilabel_train_module(bert
                                             , lr=1e-5
                                             , num_classes=14
