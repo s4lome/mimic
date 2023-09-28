@@ -11,8 +11,11 @@ from transformers import BertTokenizer
 from torch.utils.data import DataLoader, Dataset
 
 
+from transformers import AutoTokenizer, AutoModel
+
+
 class MIMIC_DataSet(Dataset):
-    def __init__(self, path, label_file, transform=None, task='multilabel', target_label='No Finding', view_position='PA'):
+    def __init__(self, path, label_file, transform=None, task='multilabel', target_label='No Finding', view_position='PA', tokenize=True):
         self.path=path
         self.task=task
         self.target_label = target_label
@@ -20,7 +23,10 @@ class MIMIC_DataSet(Dataset):
         self.view_position = view_position
         self.annotations_file = preprocces_annotations(self)      
         self.transform = transform
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+        #self.tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+        self.tokenize = tokenize
+        self.tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
+
 
     def __len__(self):
         return len(self.annotations_file)
@@ -53,11 +59,12 @@ class MIMIC_DataSet(Dataset):
             text = file.read()
        
         # tokenize 
-        token = self.tokenizer(text,padding='max_length', max_length = 512, 
-                           truncation=True, return_tensors="pt")
+        if self.tokenize:
+            text = self.tokenizer(text,padding='max_length', max_length = 512, 
+                            truncation=True, return_tensors="pt")
            
         
-        return (image,token), label
+        return (image,text), label
     
 def preprocces_annotations(self):
     # read label file (227,827 entries)

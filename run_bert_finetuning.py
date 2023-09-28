@@ -19,6 +19,7 @@ from multilabel_module import multilabel_train_module
 from utils import plot_train_val_loss
 from utils import plot_train_val_auroc
 from models import Bert_Teacher
+from models import Bert_Clinical_Teacher
 
 def run(args):
     # set seeds
@@ -45,9 +46,9 @@ def run(args):
     val, test = train_val_test_split(test_val, 0.5)
 
     # create data sets and loaders
-    mimic_train = MIMIC_TextReportsDataset('/home/fe/baur/datasets/mimic-cxr-jpg-2.0.0-small/', train)
-    mimic_val = MIMIC_TextReportsDataset('/home/fe/baur/datasets/mimic-cxr-jpg-2.0.0-small/', val)
-    test_set = MIMIC_TextReportsDataset('/home/fe/baur/datasets/mimic-cxr-jpg-2.0.0-small/', test)
+    mimic_train = MIMIC_TextReportsDataset('/home/fe/baur/datasets/mimic-cxr-jpg-2.0.0-small/', train, args.filter_out_labels)
+    mimic_val = MIMIC_TextReportsDataset('/home/fe/baur/datasets/mimic-cxr-jpg-2.0.0-small/', val, args.filter_out_labels)
+    test_set = MIMIC_TextReportsDataset('/home/fe/baur/datasets/mimic-cxr-jpg-2.0.0-small/', test, args.filter_out_labels)
 
     print('Total of Train Images loaded: ' + str(len(mimic_train)))
     print('Total of Validation Images loaded: ' + str(len(mimic_val)))
@@ -104,7 +105,8 @@ def run(args):
     print('Logging to: ' + logger.log_dir)
     print('')
     
-    network = Bert_Teacher(args.num_classes)
+    #network = Bert_Teacher(args.num_classes)
+    network = Bert_Clinical_Teacher(args.num_classes)
 
 
     model = multilabel_train_module(network
@@ -155,6 +157,9 @@ if __name__ == '__main__':
     parser.add_argument('--pretrained', default=True, type=bool, help="Use Pretrained Models")
     parser.add_argument('--target_label', default='No Finding', type=str, help="Pathology to evaluate for Binary Task")
     parser.add_argument('--view_position', default='PA', type=str, help="View Position of XRay Image to evaluate.")
+
+    parser.add_argument('--filter_out_labels', default=False, type=bool, help="Wether to filter out labels from Text")
+
 
     args = parser.parse_args()
     run(args)

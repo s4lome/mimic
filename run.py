@@ -26,6 +26,9 @@ from utils import plot_train_val_loss
 from utils import plot_train_val_auroc
 
 from models import Bert_Teacher
+from models import Bert_Clinical_Teacher
+from models import Meta_Transformer
+
 from multilabel_module import multilabel_train_module
 
 
@@ -81,14 +84,19 @@ def run(args):
     train, test_val = train_val_test_split(label_file, 0.2)
     val, test = train_val_test_split(test_val, 0.5)
 
-    # create data sets and loaders
-    mimic_train = MIMIC_DataSet(args.data_path, train, train_transform, args.task, args.target_label, args.view_position)
-    mimic_val = MIMIC_DataSet(args.data_path, val, val_transform, args.task, args.target_label, args.view_position)
-   
+    if args.architecture=='meta_transformer':
+        tokenize=False
+    else:
+        tokenize=True
 
+
+    # create data sets and loaders
+    mimic_train = MIMIC_DataSet(args.data_path, train, train_transform, args.task, args.target_label, args.view_position, tokenize=tokenize)
+    mimic_val = MIMIC_DataSet(args.data_path, val, val_transform, args.task, args.target_label, args.view_position, tokenize=tokenize)
+   
     test_sets = {}
     for i in args.noise_levels:
-        test_sets[i] = MIMIC_DataSet(args.data_path, test, test_transforms[i], args.task, args.target_label, args.view_position)
+        test_sets[i] = MIMIC_DataSet(args.data_path, test, test_transforms[i], args.task, args.target_label, args.view_position, tokenize=tokenize)
 
 
     print('Total of Train Images loaded: ' + str(len(mimic_train)))
@@ -122,7 +130,8 @@ def run(args):
     bert=None
     if args.priviliged_knowledge:
         # load fine tuned bert teacher
-        bert = Bert_Teacher(args.num_classes)
+        #bert = Bert_Teacher(args.num_classes)
+        bert = Bert_Clinical_Teacher(args.num_classes)
 
         teacher_module = multilabel_train_module(bert
                                             , lr=1e-5
@@ -142,14 +151,17 @@ def run(args):
         print('Bert Teacher initialized.')
 
     # create model
-    network = timm.create_model(args.architecture
-                                , num_classes=args.num_classes
-                                , drop_rate = args.dropout_rate
-                                #, pos_drop_rate = args.dropout_rate
-                                #, proj_drop_rate = args.dropout_rate
-                                , attn_drop_rate = args.dropout_rate
-                                , drop_path_rate = args.dropout_rate
-                                , pretrained=args.pretrained)
+    if args.architecture == 'meta_transformer':
+        network = Meta_Transformer(args.num_classes, '/home/fe/baur/Downloads/Meta-Transformer_base_patch16_encoder (1).pth')
+    else:
+        network = timm.create_model(args.architecture
+                                    , num_classes=args.num_classes
+                                    , drop_rate = args.dropout_rate
+                                    #, pos_drop_rate = args.dropout_rate
+                                    #, proj_drop_rate = args.dropout_rate
+                                    , attn_drop_rate = args.dropout_rate
+                                    , drop_path_rate = args.dropout_rate
+                                    , pretrained=args.pretrained)
 
     #### training
     torch.set_float32_matmul_precision('high')
@@ -261,4 +273,10 @@ if __name__ == '__main__':
     parser.add_argument('--temperature', default=1, type=float, help="Temperature for Privilged Knowledge Learning")
     
     args = parser.parse_args()
+
+     # Print all parsed arguments dynamically
+    print("Arguments:")
+    for arg_name, arg_value in vars(args).items():
+        print(f"{arg_name}: {arg_value}")
+
     run(args)

@@ -3,16 +3,19 @@ from transformers import BertTokenizer
 from torch.utils.data import DataLoader, Dataset
 import pandas as pd
 import re
+from transformers import AutoTokenizer, AutoModel
 
 class MIMIC_TextReportsDataset(Dataset):
-    def __init__(self, path, label_file):     
+    def __init__(self, path, label_file, filter_out_labels):     
         self.label_file = label_file
         self.path=path
+        self.filter_out_labels = filter_out_labels
 
         self.annotations_file = preprocces_annotations(self)
 
         self.labels = self.annotations_file.iloc[:,2]
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+        #self.tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+        self.tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
 
     def __len__(self):
         return len(self.annotations_file)
@@ -30,8 +33,11 @@ class MIMIC_TextReportsDataset(Dataset):
             text = file.read()
 
        # Preprocess text
-        text = preprocess_text(text)
-        #print(text)
+        if self.filter_out_labels:
+            text = preprocess_text(text)
+
+            #print(text)
+
         # tokenize 
         token = self.tokenizer(text,padding='max_length', max_length = 512, 
                            truncation=True, return_tensors="pt")
@@ -67,16 +73,37 @@ def preprocces_annotations(self):
 
     return annotations
 
+'''
 def preprocess_text(text):
     # Define words to omit (in lowercase)
-    words_to_omit = ['pleural effusion', 'effusion', 'Atelectasis', 'Cardiomegaly', 'Consolidation', 'Edema', 'Enlarged Cardiomediastinum',
-    'Fracture', 'Lung Lesion', 'Lung Opacity', 'No Finding', 'Pleural Effusions',
-    'Pleural', 'Pneumonia', 'Pneumothorax', 'Support Devices']  # Add more words if needed
+    words_to_omit = ['pleural effusion', 'effusion', 'effusions', 'Atelectasis', 'Cardiomegaly', 'Consolidation', 'Edema', 'Enlarged Cardiomediastinum',
+    'Fracture', 'fractures' 'Lung Lesion', 'Lung Opacity', 'Opacity', 'No Finding', 'Pleural Effusions',
+    'Pleural', 'Pneumonia', 'Pneumothorax', 'Support Devices', 'Device', 'Devices', 'opacities']  # Add more words if needed
 
-    # Use case-insensitive regular expression to find and replace words to omit
-    for word in words_to_omit:
-        pattern = re.compile(r'\b' + re.escape(word) + r'\b', re.IGNORECASE)
-        text = pattern.sub('_', text)
+    # Create a regular expression pattern to find any word containing the words to omit
+    pattern = re.compile(r'\b(?:' + '|'.join(map(re.escape, words_to_omit)) + r')\b', re.IGNORECASE)
+
+    # Use the pattern to replace matching words with underscores
+    text = pattern.sub('_', text)
+
+    return text
+'''
+
+def preprocess_text(text):
+    # Define words to keep (in lowercase and their plural forms)
+    words_to_keep = ['pleural effusion', 'effusion', 'effusions', 'Atelectasis', 'Cardiomegaly', 'Consolidation', 'Edema', 'Edemas', 'Enlarged Cardiomediastinum',
+    'Fracture', 'fractures' 'Lung Lesion', 'Lung Opacity', 'Opacity', 'No Finding', 'Pleural Effusions',
+    'Pleural', 'Pneumonia', 'Pneumothorax', 'Support Devices', 'Device', 'Devices', 'opacities']  # Add more words if needed
+
+    # Remove punctuation marks and convert text to lowercase
+    text = re.sub(r'[^\w\s]', '', text).lower()
+
+    # Create a regular expression pattern to find any word not in the words_to_keep list (case insensitive)
+    # This pattern handles both singular and plural forms
+    pattern = re.compile(r'\b(?!(?:' + '|'.join(map(re.escape, words_to_keep)) + r')\b)(\w+s?\b)', re.IGNORECASE)
+
+    # Use the pattern to replace all other words with an empty string
+    text = pattern.sub('', text)
 
     return text
 
