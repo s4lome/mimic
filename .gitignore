@@ -27,3 +27,4 @@ run_multiple.sh
 /layers
 /notebooks
 /swin_models
+pytorch-image-models
