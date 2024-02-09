@@ -105,8 +105,8 @@ def run(args):
     print('Logging to: ' + logger.log_dir)
     print('')
     
-    #network = Bert_Teacher(args.num_classes)
-    network = Bert_Clinical_Teacher(args.num_classes)
+    network = Bert_Teacher(args.num_classes)
+    #network = Bert_Clinical_Teacher(args.num_classes)
 
 
     model = multilabel_train_module(network

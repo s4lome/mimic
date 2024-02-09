@@ -8,6 +8,8 @@ from torchmetrics.classification import BinaryAUROC
 
 from models import Meta_Transformer
 
+from utils import pad_text_for_vit
+
 class multilabel_train_module(pl.LightningModule):
     def __init__(self
                  , model=None
@@ -20,10 +22,12 @@ class multilabel_train_module(pl.LightningModule):
                  , class_dict={}
                  , logging_dir=''
                  , logging=True
-                 , training_start_time=''):
+                 , training_start_time=''
+                 , mode='standard'):
         
         super().__init__()
         
+        self.mode = mode
         self.model = model
         self.teacher = teacher 
         self.imitation = 0
@@ -66,11 +70,14 @@ class multilabel_train_module(pl.LightningModule):
 
         if isinstance(self.model, Meta_Transformer):
             loss = meta_transformer_train_step(self, image_and_text, y)
-
+        
+        elif self.mode == 'dual':
+            loss = dual_transformer_train_step(self, image_and_text, y)
+        
         else:
             loss = privileged_knowlegde_train_step(self, image_and_text, y)
         
-        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=self.logging, batch_size=y.shape[0])
+        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=self.logging)
 
         return loss    
     
@@ -97,9 +104,10 @@ class multilabel_train_module(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         # data
         x, y = batch
-        
+       
         x = x[0]
 
+        
         y_hat = self.model(x)
         y = y.squeeze()
         y_hat = y_hat.squeeze()
@@ -111,10 +119,11 @@ class multilabel_train_module(pl.LightningModule):
         # loss
         loss = self.loss_criterion(y_hat.float(), y.float())
 
-        self.log("validation_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=self.logging, batch_size=y.shape[0])
-
+        self.log("validation_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=self.logging)
+        
     def on_validation_epoch_end(self):
         # concat all steps
+ 
         all_predictions = torch.cat(self.validation_step_outputs, dim=0)
         all_targets = torch.cat(self.validation_step_targets, dim=0)
             
@@ -146,7 +155,7 @@ class multilabel_train_module(pl.LightningModule):
         
         # loss
         loss = self.loss_criterion(y_hat.float(), y.float())
-        self.log("Test BCE Loss: ", loss, on_step=False, on_epoch=True, prog_bar=True, logger=self.logging, batch_size=y.shape[0])
+        self.log("Test BCE Loss: ", loss, on_step=False, on_epoch=True, prog_bar=True, logger=self.logging)
   
     def on_test_epoch_end(self):
         # concat all steps
@@ -178,10 +187,8 @@ class multilabel_train_module(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=0.1)
-        #scheduler = CosineAnnealingLR(optimizer,
-        #                      T_max = self.steps_per_epoch, # Maximum number of iterations.
-        #                     eta_min = 1e-7) # Minimum learning rate.
-        return optimizer#, [scheduler]
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 100, eta_min=0)
+        return ([optimizer], [scheduler])
     
 
 def privileged_knowlegde_train_step(self, image_and_text, y):
@@ -198,7 +205,7 @@ def privileged_knowlegde_train_step(self, image_and_text, y):
             soft_labels = self.output_activation(soft_labels)
           # soft_labels = (soft_labels >= 0.5).to(torch.float32)
 
-          #   y_hat = (1 - self.imitation) * y_hat + self.imitation * soft_labels
+            #y_hat = (1 - self.imitation) * y_hat + self.imitation * soft_labels
 
         # add to global
         self.train_step_outputs.append(y_hat.detach())
@@ -206,26 +213,73 @@ def privileged_knowlegde_train_step(self, image_and_text, y):
         
         #loss = self.loss_criterion(y_hat.float(), y.float())
 
+        
         # loss
         loss = (1 - self.imitation) * self.loss_criterion(y_hat.float(), y.float())
         
         if self.teacher:
             loss += self.imitation * self.loss_criterion(y_hat.float(), soft_labels)
-        
+                
         return loss
 
 
 def meta_transformer_train_step(self, image_and_text, y):
+    y_hat = self.model(image_and_text)
+
+    #y_hat_image, y_hat_text = self.model(image_and_text)
     
-    y_hat_image, y_hat_text = self.model(image_and_text)
+    #loss_image = self.loss_criterion(y_hat.float(), y.float())
+
     
+    '''
+    multi modal
     loss_image = self.loss_criterion(y_hat_image.float(), y.float())
     loss_text = self.loss_criterion(y_hat_text.float(), y.float())
     
-    y_hat = (y_hat_image + y_hat_text) / 2
+    #y_hat = (y_hat_image + y_hat_text) / 2
+    y_hat = (0.9*y_hat_image) + (0.1*y_hat_text)
+
+    
     self.train_step_outputs.append(y_hat.detach())
     self.train_step_targets.append(y.detach())
 
-    loss = loss_image + loss_text
+    loss = (0.9 * loss_image) + (0.1 * loss_text)
+    '''
+    ###############################################################
+    '''
+    # self distillation
+    loss_image = self.loss_criterion(y_hat_image.float(), y.float())
+    
+    loss_text = self.loss_criterion(y_hat_image.float(), self.output_activation(y_hat_text.float()/30))
+    
+    loss = (0.5 * loss_image) + (0.5 * loss_text)
+
+
+    self.train_step_outputs.append(y_hat_image.detach())
+    self.train_step_targets.append(y.detach())
+    '''
+    loss = self.loss_criterion(y_hat.float(), y.float())
+    self.train_step_outputs.append(y_hat.detach())
+    self.train_step_targets.append(y.detach())
+
 
     return loss
+
+def dual_transformer_train_step(self, image_and_text, y):
+        x_image = image_and_text[0]
+        
+        x_text = image_and_text[1]['input_ids']
+        x_text = pad_text_for_vit(x_text)
+
+        y_hat_image = self.model(x_image)
+        y_hat_text = self.model(x_text)
+
+        loss_image = self.loss_criterion(y_hat_image.float(), y.float())
+        loss_text = self.loss_criterion(y_hat_image.float(), self.output_activation(y_hat_text.float() / self.temperature ))
+
+        loss = loss_image + loss_text
+
+        self.train_step_outputs.append(y_hat_image.detach())
+        self.train_step_targets.append(y.detach())
+
+        return loss

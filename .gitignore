@@ -14,3 +14,16 @@ Bert Debugging.ipynb
 bert_interpretation.ipynb
 .gitignore
 Untitled.ipynb
+differences/pk vit tiny no labels/version_1
+differences/pk vit tiny no labels/version_2
+differences/pk vit tiny no labels/version_3
+differences/pk vit tiny no labels/version_4
+differences/pk vit tiny no labels/version_5
+download_nih.sh
+cvpr_additional_experiments.sh
+filename.csv
+move_nih_images.sh
+run_multiple.sh
+/layers
+/notebooks
+/swin_models

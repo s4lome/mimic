@@ -9,6 +9,7 @@ from sklearn.model_selection import GroupShuffleSplit
 
 from transformers import BertTokenizer
 from torch.utils.data import DataLoader, Dataset
+import re
 
 
 from transformers import AutoTokenizer, AutoModel
@@ -41,6 +42,7 @@ class MIMIC_DataSet(Dataset):
         # path/files_small/p10/p10000032/dicom_id
         img_path = self.path + "files_small/" + "p" + str(subject_id)[:2] + "/p" + str(subject_id) + "/s" + str(study_id) + "/" + dicom_id + ".jpg"
         image = cv2.imread(img_path)
+        #image = cv2.imread(img_path,cv2.IMREAD_GRAYSCALE)
         
         # get labels, 4th col of annotations file contains labels
         label = torch.tensor(self.annotations_file.iloc[index,3],dtype=torch.long)
@@ -57,6 +59,8 @@ class MIMIC_DataSet(Dataset):
         # get text
         with open(text_path, 'r', encoding='utf-8') as file:
             text = file.read()
+
+        text = preprocess_text(text)
        
         # tokenize 
         if self.tokenize:
@@ -98,3 +102,37 @@ def preprocces_annotations(self):
 
     return annotations
 
+
+def preprocess_text(text):
+    # Define words to omit (in lowercase)
+    words_to_omit = ['pleural effusion', 'effusion', 'effusions', 'Atelectasis', 'Cardiomegaly', 'Consolidation', 'Edema', 'Enlarged Cardiomediastinum',
+    'Fracture', 'fractures' 'Lung Lesion', 'Lung Opacity', 'Opacity', 'No Finding', 'Pleural Effusions',
+    'Pleural', 'Pneumonia', 'Pneumothorax', 'Support Devices', 'Device', 'Devices', 'opacities']  # Add more words if needed
+
+    # Create a regular expression pattern to find any word containing the words to omit
+    pattern = re.compile(r'\b(?:' + '|'.join(map(re.escape, words_to_omit)) + r')\b', re.IGNORECASE)
+
+    # Use the pattern to replace matching words with underscores
+    text = pattern.sub('_', text)
+
+    return text
+
+'''
+def preprocess_text(text):
+    # Define words to keep (in lowercase and their plural forms)
+    words_to_keep = ['pleural effusion', 'effusion', 'effusions', 'Atelectasis', 'Cardiomegaly', 'Consolidation', 'Edema', 'Edemas', 'Enlarged Cardiomediastinum',
+    'Fracture', 'fractures' 'Lung Lesion', 'Lung Opacity', 'Opacity', 'No Finding', 'Pleural Effusions',
+    'Pleural', 'Pneumonia', 'Pneumothorax', 'Support Devices', 'Device', 'Devices', 'opacities']  # Add more words if needed
+
+    # Remove punctuation marks and convert text to lowercase
+    text = re.sub(r'[^\w\s]', '', text).lower()
+
+    # Create a regular expression pattern to find any word not in the words_to_keep list (case insensitive)
+    # This pattern handles both singular and plural forms
+    pattern = re.compile(r'\b(?!(?:' + '|'.join(map(re.escape, words_to_keep)) + r')\b)(\w+s?\b)', re.IGNORECASE)
+
+    # Use the pattern to replace all other words with an empty string
+    text = pattern.sub('', text)
+
+    return text
+'''

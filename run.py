@@ -19,6 +19,9 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 from albumentations.pytorch import ToTensorV2
 
 from mimic_dataset import MIMIC_DataSet
+from chexpert_dataset import CheXpert_DataSet
+from chest_xray_14_dataset import Chest_XRay_14_DataSet
+
 from utils import train_val_test_split
 from binary_module import binary_train_module
 from utils import plot_roc_curves
@@ -31,6 +34,9 @@ from models import Meta_Transformer
 
 from multilabel_module import multilabel_train_module
 
+from vision_transformer import vit_tiny
+
+#from swin_models import SwinTransformer
 
 #torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -72,10 +78,15 @@ def run(args):
                                , ToTensorV2()])
 
 
-    train_transform = A.Compose([A.Resize(256, 256, always_apply=True),
-                                 A.CenterCrop(224, 224, always_apply=True),
-                                 A.Normalize(mean=mean, std=std),
-                                 ToTensorV2()])
+    train_transform = A.Compose([
+        A.Resize(256, 256, always_apply=True),
+        A.CenterCrop(224, 224, always_apply=True),
+        A.HorizontalFlip(p=0.3),
+        A.VerticalFlip(p=0.3),
+        A.Cutout(num_holes=4, max_h_size=32, max_w_size=32, fill_value=0, always_apply=False, p=0.5),
+        A.Normalize(mean=mean, std=std),
+        ToTensorV2()
+])
 
     # mimic labels
     label_file = pd.read_csv(data_path + "mimic-cxr-2.0.0-chexpert.csv")
@@ -93,10 +104,26 @@ def run(args):
     # create data sets and loaders
     mimic_train = MIMIC_DataSet(args.data_path, train, train_transform, args.task, args.target_label, args.view_position, tokenize=tokenize)
     mimic_val = MIMIC_DataSet(args.data_path, val, val_transform, args.task, args.target_label, args.view_position, tokenize=tokenize)
-   
+    
+
+
     test_sets = {}
-    for i in args.noise_levels:
-        test_sets[i] = MIMIC_DataSet(args.data_path, test, test_transforms[i], args.task, args.target_label, args.view_position, tokenize=tokenize)
+    if args.ood:
+
+        for i in args.noise_levels:
+            annotations = pd.read_csv('/media/baur/LaCie/CXR8/Data_Entry_2017_v2020.csv')
+            #annotations = annotations[annotations['View Position'] == 'PA']
+            #annotations = annotations.sample(frac=0.05)
+            with open('/media/baur/LaCie/CXR8/test_list.txt', 'r') as file:
+                test_set = file.read().splitlines()
+            annotations = annotations[annotations['Image Index'].isin(test_set)]    
+            #test_sets[i] = CheXpert_DataSet('/home/fe/baur/datasets', pathology_dict=pathology_dict, transforms=test_transforms[i])
+            test_sets[i] = Chest_XRay_14_DataSet('/media/baur/LaCie/CXR8/images/all_images', annotations, pathology_dict, transforms=test_transforms[i])
+
+            
+    else:
+        for i in args.noise_levels:
+            test_sets[i] = MIMIC_DataSet(args.data_path, test, test_transforms[i], args.task, args.target_label, args.view_position, tokenize=tokenize)
 
 
     print('Total of Train Images loaded: ' + str(len(mimic_train)))
@@ -116,6 +143,9 @@ def run(args):
                             , shuffle=False
                             , num_workers=8)
     
+
+
+    
     test_loaders = {}
     for i in args.noise_levels:
         test_loaders[i] = DataLoader(dataset = test_sets[i]
@@ -130,8 +160,8 @@ def run(args):
     bert=None
     if args.priviliged_knowledge:
         # load fine tuned bert teacher
-        #bert = Bert_Teacher(args.num_classes)
-        bert = Bert_Clinical_Teacher(args.num_classes)
+        bert = Bert_Teacher(args.num_classes)
+        #bert = Bert_Clinical_Teacher(args.num_classes)
 
         teacher_module = multilabel_train_module(bert
                                             , lr=1e-5
@@ -141,6 +171,7 @@ def run(args):
                                             , logging_dir=''
                                             , logging=True
                                             , training_start_time=''
+                                            #, batch_size = args.batch_size
                                             )
         
         checkpoint = torch.load(args.bert_checkpoint)
@@ -154,6 +185,7 @@ def run(args):
     if args.architecture == 'meta_transformer':
         network = Meta_Transformer(args.num_classes, '/home/fe/baur/Downloads/Meta-Transformer_base_patch16_encoder (1).pth')
     else:
+        '''
         network = timm.create_model(args.architecture
                                     , num_classes=args.num_classes
                                     , drop_rate = args.dropout_rate
@@ -161,8 +193,12 @@ def run(args):
                                     #, proj_drop_rate = args.dropout_rate
                                     , attn_drop_rate = args.dropout_rate
                                     , drop_path_rate = args.dropout_rate
-                                    , pretrained=args.pretrained)
-
+                                    #, patch_size=16, embed_dim=384
+                                    , pretrained=args.pretrained
+                                    )
+        '''
+        #network = SwinTransformer(num_classes=14)
+        network = vit_tiny(num_classes=14, drop_path_rate=args.dropout_rate, drop_rate=args.dropout_rate)
     #### training
     torch.set_float32_matmul_precision('high')
 
@@ -208,6 +244,7 @@ def run(args):
                                         , logging_dir=logger.log_dir
                                         , logging=args.logging
                                         , training_start_time=training_start_time
+                                        , mode = args.mode
                                         )
     # load checkpoint
     #checkpoint = torch.load("/home/fe/baur/wd/projects/mimic/logs/vit_large_patch16_224/version_2/checkpoints/epoch=1-step=16396.ckpt")
@@ -234,10 +271,13 @@ def run(args):
                     , model.logging_dir
                     , args.architecture)
     
-    # plot train val metrics
-    plot_train_val_loss(model.logging_dir)
-    plot_train_val_auroc(model.logging_dir)
-
+    try:
+        # plot train val metrics
+        plot_train_val_loss(model.logging_dir)
+        plot_train_val_auroc(model.logging_dir)
+    except Exception as e:
+        print('No Training plots created.')
+    
     # Save All outputs
     file_path = model.logging_dir + '/predictions_and_targets.json'
     torch.save(predictions_and_targets, file_path)
@@ -250,8 +290,9 @@ if __name__ == '__main__':
     parser.add_argument('--logging', default=True, type=bool, help='Enable Logger')
     parser.add_argument('--checkpoint', default='best', type=str, help='evaluate best checkpoint after training or presaved checkpoint (path in the latter case)')
     parser.add_argument('--priviliged_knowledge', default=False, type=bool, help='Train with Privilegded Knowledge')
+    parser.add_argument('--ood', default=False, type=bool, help='Evaluate on OOD Data')
 
-    parser.add_argument('--bert_checkpoint', default='/home/fe/baur/wd/projects/mimic/logs/bert/version_10/checkpoints/epoch=0-step=8198.ckpt', type=str, help='path to .ckpt of fine tuned bert model.')
+    parser.add_argument('--bert_checkpoint', default='/home/fe/baur/wd/projects/mimic/logs/bert/no_labels/checkpoints/epoch=0-step=29719.ckpt', type=str, help='path to .ckpt of fine tuned bert model.')
 
     parser.add_argument('--batch_size', default=512, type=int, help='batch_size for data loaders')
     parser.add_argument('--epochs', default=100, type=int, help='number of training epochs')
@@ -271,6 +312,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--imitation', default=0, type=float, help="Imitation Rate for Priviliged Knowledge Learning")
     parser.add_argument('--temperature', default=1, type=float, help="Temperature for Privilged Knowledge Learning")
+    parser.add_argument('--mode', default='standard', type=str, help="Train Step mode (standard, dual, meta)")
+
     
     args = parser.parse_args()
 

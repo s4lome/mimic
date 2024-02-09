@@ -14,8 +14,8 @@ class MIMIC_TextReportsDataset(Dataset):
         self.annotations_file = preprocces_annotations(self)
 
         self.labels = self.annotations_file.iloc[:,2]
-        #self.tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
-        self.tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+        #self.tokenizer = AutoTokenizer.from_pretrained("emilyalsentzer/Bio_ClinicalBERT")
 
     def __len__(self):
         return len(self.annotations_file)
@@ -33,8 +33,8 @@ class MIMIC_TextReportsDataset(Dataset):
             text = file.read()
 
        # Preprocess text
-        if self.filter_out_labels:
-            text = preprocess_text(text)
+        #if self.filter_out_labels:
+        text = preprocess_text(text)
 
             #print(text)
 
@@ -73,7 +73,7 @@ def preprocces_annotations(self):
 
     return annotations
 
-'''
+
 def preprocess_text(text):
     # Define words to omit (in lowercase)
     words_to_omit = ['pleural effusion', 'effusion', 'effusions', 'Atelectasis', 'Cardiomegaly', 'Consolidation', 'Edema', 'Enlarged Cardiomediastinum',
@@ -106,4 +106,4 @@ def preprocess_text(text):
     text = pattern.sub('', text)
 
     return text
-
+'''
